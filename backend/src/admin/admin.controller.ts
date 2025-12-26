@@ -8,7 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminController {
-  constructor(private service: AdminService) {}
+  constructor(private service: AdminService) { }
 
   @Get('users')
   getUsers() {
@@ -25,6 +25,11 @@ export class AdminController {
     return this.service.updateUserRole(id, role);
   }
 
+  @Get('reviews')
+  getReviews() {
+    return this.service.getReviews();
+  }
+
   @Delete('reviews/:id')
   deleteReview(@Param('id') id: number) {
     return this.service.deleteReview(id);
@@ -33,5 +38,15 @@ export class AdminController {
   @Get('logs')
   getLogs() {
     return this.service.getLogs();
+  }
+
+  @Get('watchlists')
+  getWatchlists() {
+    return this.service.getWatchlists();
+  }
+
+  @Get('stats')
+  getStats() {
+    return this.service.getStats();
   }
 }
