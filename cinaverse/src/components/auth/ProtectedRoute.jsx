@@ -1,19 +1,16 @@
-import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 
-const ProtectedRoute = ({ children, requireAdmin = false, requireParent = false }) => {
-  const { user, token } = useStore();
+const ProtectedRoute = ({ children, role }) => {
+  const { user, loading } = useStore();
 
-  if (!token) {
-    return <Navigate to="/login" replace />;
+  if (loading) return <div className="bg-black min-vh-100"></div>;
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
   }
 
-  if (requireAdmin && user?.role !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  if (requireParent && user?.role !== 'parent') {
+  if (role && user.role !== role) {
     return <Navigate to="/dashboard" replace />;
   }
 
