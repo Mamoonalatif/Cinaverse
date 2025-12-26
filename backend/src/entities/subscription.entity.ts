@@ -13,9 +13,15 @@ export class Subscription {
   @ManyToOne(() => Plan)
   plan: Plan;
 
+  @Column({ default: 'active' })
+  status: string; // active, inactive
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   startDate: Date;
 
   @Column({ type: 'timestamp', nullable: true })
   endDate: Date | null;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 }
