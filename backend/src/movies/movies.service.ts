@@ -35,6 +35,10 @@ const GENRE_NAME_TO_ID: Record<string, number> = {
 @Injectable()
 export class MoviesService {
   private base = 'https://api.themoviedb.org/3';
+  private memoryCache = new Map<string, { data: any; timestamp: number }>();
+  private CACHE_TTL = 900000; // 15 minutes
+  private configCache = new Map<string, { data: any; timestamp: number }>();
+  private CONFIG_TTL = 300000; // 5 minutes for user/child configs
 
   constructor(
     private http: HttpService,
@@ -42,76 +46,167 @@ export class MoviesService {
     @InjectRepository(MovieCache) private cache: Repository<MovieCache>,
     @InjectRepository(ParentalSettings) private parentalRepo: Repository<ParentalSettings>,
     @InjectRepository(ChildProfile) private childRepo: Repository<ChildProfile>,
-  ) {}
+  ) { }
+
+  private getCached(key: string) {
+    const cached = this.memoryCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) return cached.data;
+    return null;
+  }
+
+  private setCache(key: string, data: any) {
+    this.memoryCache.set(key, { data, timestamp: Date.now() });
+  }
 
   async search(query: string, userId?: number, childProfileId?: number) {
-    const key = this.config.get('TMDB_API_KEY');
-    const res = await this.http.axiosRef.get(`${this.base}/search/movie`, { params: { api_key: key, query } });
+    const cacheKey = `search_${query}`;
+    let data = this.getCached(cacheKey);
+
+    if (!data) {
+      const key = this.config.get('TMDB_API_KEY');
+      const res = await this.http.axiosRef.get(`${this.base}/search/movie`, { params: { api_key: key, query } });
+      data = res.data;
+      this.setCache(cacheKey, data);
+    }
+
     const filter = await this.getFilterConfig(userId, childProfileId);
-    return this.filterList(res.data, filter);
+    return this.filterList(data, filter);
   }
 
   async getTrending(timeWindow: 'day' | 'week' = 'week', userId?: number, childProfileId?: number) {
-    const key = this.config.get('TMDB_API_KEY');
-    const res = await this.http.axiosRef.get(`${this.base}/trending/movie/${timeWindow}`, { params: { api_key: key } });
+    const cacheKey = `trending_${timeWindow}`;
+    let data = this.getCached(cacheKey);
+
+    if (!data) {
+      const key = this.config.get('TMDB_API_KEY');
+      const res = await this.http.axiosRef.get(`${this.base}/trending/movie/${timeWindow}`, { params: { api_key: key } });
+      data = res.data;
+      this.setCache(cacheKey, data);
+    }
+
     const filter = await this.getFilterConfig(userId, childProfileId);
-    return this.filterList(res.data, filter);
+    return this.filterList(data, filter);
   }
 
   async getPopular(page: number = 1, userId?: number, childProfileId?: number) {
-    const key = this.config.get('TMDB_API_KEY');
-    const res = await this.http.axiosRef.get(`${this.base}/movie/popular`, { params: { api_key: key, page } });
+    const cacheKey = `popular_${page}`;
+    let data = this.getCached(cacheKey);
+
+    if (!data) {
+      const key = this.config.get('TMDB_API_KEY');
+      const res = await this.http.axiosRef.get(`${this.base}/movie/popular`, { params: { api_key: key, page } });
+      data = res.data;
+      this.setCache(cacheKey, data);
+    }
+
     const filter = await this.getFilterConfig(userId, childProfileId);
-    return this.filterList(res.data, filter);
+    return this.filterList(data, filter);
   }
 
   async getLatestReleases(userId?: number, childProfileId?: number) {
-    const key = this.config.get('TMDB_API_KEY');
-    const currentYear = new Date().getFullYear();
-    const res = await this.http.axiosRef.get(`${this.base}/discover/movie`, {
-      params: {
-        api_key: key,
-        primary_release_year: currentYear,
-        sort_by: 'release_date.desc',
-        'vote_count.gte': 10,
-      },
-    });
+    const cacheKey = 'latest_releases';
+    let data = this.getCached(cacheKey);
+
+    if (!data) {
+      const key = this.config.get('TMDB_API_KEY');
+      const currentYear = new Date().getFullYear();
+      const res = await this.http.axiosRef.get(`${this.base}/discover/movie`, {
+        params: {
+          api_key: key,
+          primary_release_year: currentYear,
+          sort_by: 'release_date.desc',
+          'vote_count.gte': 10,
+        },
+      });
+      data = res.data;
+      this.setCache(cacheKey, data);
+    }
+
     const filter = await this.getFilterConfig(userId, childProfileId);
-    return this.filterList(res.data, filter);
+    return this.filterList(data, filter);
   }
 
   async getDetails(id: string, userId?: number, childProfileId?: number) {
     const cached = await this.cache.findOne({ where: { movieId: id } });
-    if (cached && Date.now() - new Date(cached.updatedAt).getTime() < 86400000) return cached.data;
-    
+    if (cached && Date.now() - new Date(cached.updatedAt).getTime() < 86400000) {
+      const filter = await this.getFilterConfig(userId, childProfileId);
+      this.ensureDetailAllowed(cached.data, filter);
+      return cached.data;
+    }
+
     const key = this.config.get('TMDB_API_KEY');
     const res = await this.http.axiosRef.get(`${this.base}/movie/${id}`, { params: { api_key: key } });
     const filter = await this.getFilterConfig(userId, childProfileId);
     this.ensureDetailAllowed(res.data, filter);
-    await this.cache.save({ movieId: id, data: res.data });
+    await this.cache.upsert({ movieId: id, data: res.data }, ['movieId']);
     return res.data;
   }
 
   async getTrailer(id: string) {
+    const cacheKey = `trailer_${id}`;
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
     const key = this.config.get('TMDB_API_KEY');
     const res = await this.http.axiosRef.get(`${this.base}/movie/${id}/videos`, { params: { api_key: key } });
-    return res.data.results.find((v: any) => v.type === 'Trailer') || null;
+    const trailer = res.data.results.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
+    const result = trailer && trailer.key ? { trailerUrl: `https://www.youtube.com/watch?v=${trailer.key}` } : { trailerUrl: null };
+
+    this.setCache(cacheKey, result);
+    return result;
+  }
+
+  async getSimilarMovies(id: string, userId?: number, childProfileId?: number) {
+    const cacheKey = `similar_${id}`;
+    let data = this.getCached(cacheKey);
+
+    if (!data) {
+      const key = this.config.get('TMDB_API_KEY');
+      const res = await this.http.axiosRef.get(`${this.base}/movie/${id}/similar`, { params: { api_key: key } });
+      data = res.data;
+      this.setCache(cacheKey, data);
+    }
+
+    const filter = await this.getFilterConfig(userId, childProfileId);
+    return this.filterList(data, filter);
+  }
+
+  async getGenres() {
+    const cacheKey = 'genres_list';
+    const cached = this.getCached(cacheKey);
+    if (cached) return cached;
+
+    const key = this.config.get('TMDB_API_KEY');
+    const res = await this.http.axiosRef.get(`${this.base}/genre/movie/list`, { params: { api_key: key } });
+    this.setCache(cacheKey, res.data);
+    return res.data;
   }
 
   private async getFilterConfig(userId?: number, childProfileId?: number): Promise<{ type: 'child'; cfg: ChildConfig } | { type: 'parental'; cfg: ParentalConfig } | null> {
-    if (childProfileId !== undefined && childProfileId !== null) {
-      if (!userId) {
-        throw new UnauthorizedException('Login required for child profile selection');
-      }
-      const child = await this.childRepo.findOne({ where: { id: childProfileId, parent: { id: userId } } });
-      if (!child) throw new ForbiddenException('Child profile not found or not yours');
-      return { type: 'child', cfg: { age: child.age, allowedGenres: child.allowedGenres, maxAgeRating: child.maxAgeRating } };
+    const cacheKey = childProfileId ? `child_${childProfileId}` : `parental_${userId}`;
+    if (userId || childProfileId) {
+      const cached = this.configCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.CONFIG_TTL) return cached.data;
     }
 
-    if (!userId) return null;
-    const settings = await this.parentalRepo.findOne({ where: { user: { id: userId } } });
-    if (!settings) return null;
-    return { type: 'parental', cfg: { minAge: settings.minAge, bannedGenres: settings.bannedGenres } };
+    let result: any = null;
+
+    if (childProfileId !== undefined && childProfileId !== null) {
+      if (!userId) throw new UnauthorizedException('Login required');
+      const child = await this.childRepo.findOne({ where: { id: childProfileId, parent: { id: userId } } });
+      if (!child) throw new ForbiddenException('Profile not found');
+      result = { type: 'child', cfg: { age: child.age, allowedGenres: child.allowedGenres, maxAgeRating: child.maxAgeRating } };
+    } else if (userId) {
+      const settings = await this.parentalRepo.findOne({ where: { user: { id: userId } } });
+      if (settings) {
+        result = { type: 'parental', cfg: { minAge: settings.minAge, bannedGenres: settings.bannedGenres } };
+      }
+    }
+
+    if (userId || childProfileId) {
+      this.configCache.set(cacheKey, { data: result, timestamp: Date.now() });
+    }
+    return result;
   }
 
   private parseGenreList(raw: string | null | undefined): Set<number> {
@@ -130,30 +225,52 @@ export class MoviesService {
     );
   }
 
-  private isBlockedByParental(movie: any, cfg: ParentalConfig): boolean {
-    if (!cfg) return false;
-    if ((cfg.minAge ?? 0) <= 0 && !cfg.bannedGenres) return false;
-    const bannedIds = this.parseGenreList(cfg.bannedGenres);
-    const minAge = cfg.minAge ?? 0;
-    const isAdult = Boolean(movie?.adult);
-    if (minAge > 0 && isAdult) return true;
-    if (bannedIds.size > 0) {
-      const genreIds = this.extractGenres(movie);
-      if (genreIds.some((id) => bannedIds.has(id))) return true;
-    }
-    return false;
+  private filterList(data: any, filter: { type: 'child'; cfg: ChildConfig } | { type: 'parental'; cfg: ParentalConfig } | null) {
+    if (!filter) return data;
+
+    // Pre-parse genre lists for efficiency
+    const parsedGenres = filter.type === 'child'
+      ? this.parseGenreList(filter.cfg.allowedGenres)
+      : this.parseGenreList(filter.cfg?.bannedGenres);
+
+    const minAge = filter.type === 'parental' ? filter.cfg?.minAge ?? 0 : filter.cfg.age;
+
+    const results = Array.isArray(data?.results)
+      ? data.results.filter((movie: any) => {
+        const isAdult = Boolean(movie?.adult);
+        if (minAge > 0 && isAdult && (filter.type === 'child' ? minAge < 18 : true)) return false;
+
+        const genreIds = this.extractGenres(movie);
+        if (filter.type === 'child' && parsedGenres.size > 0) {
+          if (!genreIds.some(id => parsedGenres.has(id))) return false;
+        } else if (filter.type === 'parental' && parsedGenres.size > 0) {
+          if (genreIds.some(id => parsedGenres.has(id))) return false;
+        }
+        return true;
+      })
+      : [];
+    return { ...data, results };
   }
 
-  private isBlockedByChild(movie: any, cfg: ChildConfig): boolean {
-    const genreIds = this.extractGenres(movie);
-    const allowed = this.parseGenreList(cfg.allowedGenres);
+  private ensureDetailAllowed(movie: any, filter: { type: 'child'; cfg: ChildConfig } | { type: 'parental'; cfg: ParentalConfig } | null) {
+    if (!filter) return;
+    const parsedGenres = filter.type === 'child'
+      ? this.parseGenreList(filter.cfg.allowedGenres)
+      : this.parseGenreList(filter.cfg?.bannedGenres);
+
+    const minAge = filter.type === 'parental' ? filter.cfg?.minAge ?? 0 : filter.cfg.age;
     const isAdult = Boolean(movie?.adult);
-    if (cfg.age < 18 && isAdult) return true;
-    if (allowed.size > 0) {
-      // require at least one overlap with allowed genres; if none, block
-      if (!genreIds.some((id) => allowed.has(id))) return true;
+    const genreIds = this.extractGenres(movie);
+
+    let blocked = false;
+    if (minAge > 0 && isAdult && (filter.type === 'child' ? minAge < 18 : true)) blocked = true;
+    else if (filter.type === 'child' && parsedGenres.size > 0) {
+      if (!genreIds.some(id => parsedGenres.has(id))) blocked = true;
+    } else if (filter.type === 'parental' && parsedGenres.size > 0) {
+      if (genreIds.some(id => parsedGenres.has(id))) blocked = true;
     }
-    return false;
+
+    if (blocked) throw new ForbiddenException('Blocked by restrictions');
   }
 
   private extractGenres(movie: any): number[] {
@@ -162,23 +279,4 @@ export class MoviesService {
     return [];
   }
 
-  private filterList(data: any, filter: { type: 'child'; cfg: ChildConfig } | { type: 'parental'; cfg: ParentalConfig } | null) {
-    if (!filter) return data;
-    if (filter.type === 'parental' && (!filter.cfg || ((filter.cfg.minAge ?? 0) <= 0 && !filter.cfg.bannedGenres))) return data;
-
-    const results = Array.isArray(data?.results)
-      ? data.results.filter((movie: any) => {
-          if (filter.type === 'child') return !this.isBlockedByChild(movie, filter.cfg);
-          return !this.isBlockedByParental(movie, filter.cfg);
-        })
-      : [];
-    return { ...data, results };
-  }
-
-  private ensureDetailAllowed(detail: any, filter: { type: 'child'; cfg: ChildConfig } | { type: 'parental'; cfg: ParentalConfig } | null) {
-    if (!filter) return;
-    if (filter.type === 'parental' && (!filter.cfg || ((filter.cfg.minAge ?? 0) <= 0 && !filter.cfg.bannedGenres))) return;
-    const blocked = filter.type === 'child' ? this.isBlockedByChild(detail, filter.cfg) : this.isBlockedByParental(detail, filter.cfg);
-    if (blocked) throw new ForbiddenException('Content blocked by profile restrictions');
-  }
 }
