@@ -1,0 +1,69 @@
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #ffffff;
+  background-color: #000000;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000000;
+  color: #ffffff;
+  min-height: 100vh;
+  width: 100%;
+  overflow-x: hidden;
+  display: block !important;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Override any light mode defaults */
+@media (prefers-color-scheme: light) {
+  :root {
+    background-color: #000000;
+    color: #ffffff;
+  }
+  body {
+    background-color: #000000;
+  }
+}
+
+a {
+  color: #e50914;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Utility for red buttons */
+.custom-red-btn {
+  background-color: #e50914 !important;
+  color: white !important;
+  border: none !important;
+  transition: background-color 0.2s !important;
+}
+
+.custom-red-btn:hover {
+  background-color: #f6121d !important;
+}
+
+.custom-red-btn:disabled {
+  background-color: #8c060c !important;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
