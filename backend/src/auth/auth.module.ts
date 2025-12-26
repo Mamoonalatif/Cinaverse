@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
+import { LogsModule } from '../logs/logs.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
@@ -19,6 +20,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         signOptions: { expiresIn: '1d' },
       }),
     }),
+    forwardRef(() => LogsModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
