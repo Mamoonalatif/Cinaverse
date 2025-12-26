@@ -2,7 +2,6 @@ import 'dotenv/config';
 import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './entities/user.entity';
-import { Role } from './entities/role.entity';
 import { Watchlist } from './entities/watchlist.entity';
 import { Review } from './entities/review.entity';
 import { MovieCache } from './entities/movie-cache.entity';
@@ -10,7 +9,8 @@ import { ParentalSettings } from './entities/parental-settings.entity';
 import { Plan } from './entities/plan.entity';
 import { Subscription } from './entities/subscription.entity';
 import { Payment } from './entities/payment.entity';
-import { Log } from './entities/log.entity';
+import { LoginLog } from './entities/login-log.entity';
+import { ApiLog } from './entities/api-log.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 
 function buildDataSource() {
@@ -19,7 +19,6 @@ function buildDataSource() {
     type: 'postgres' as const,
     entities: [
       User,
-      Role,
       Watchlist,
       Review,
       MovieCache,
@@ -27,7 +26,8 @@ function buildDataSource() {
       Plan,
       Subscription,
       Payment,
-      Log,
+      LoginLog,
+      ApiLog,
       ChildProfile,
     ],
     synchronize: false,
@@ -53,10 +53,9 @@ async function main() {
 
   // Reset tables (keeps schema) in a safe order using cascade.
   await runner.query(
-    'TRUNCATE TABLE "payment", "subscription", "watchlist", "review", "movie_cache", "log", "child_profile", "parental_settings", "user", "role", "plan" RESTART IDENTITY CASCADE;'
+    'TRUNCATE TABLE "payment", "subscription", "watchlist", "review", "movie_cache", "child_profile", "parental_settings", "user", "plan" RESTART IDENTITY CASCADE;'
   );
 
-  const roleRepo = ds.getRepository(Role);
   const userRepo = ds.getRepository(User);
   const parentalRepo = ds.getRepository(ParentalSettings);
   const childRepo = ds.getRepository(ChildProfile);
@@ -65,24 +64,21 @@ async function main() {
   const planRepo = ds.getRepository(Plan);
   const subRepo = ds.getRepository(Subscription);
   const payRepo = ds.getRepository(Payment);
-  const logRepo = ds.getRepository(Log);
+  // removed duplicate watchRepo
+  const loginLogRepo = ds.getRepository(LoginLog);
+  const apiLogRepo = ds.getRepository(ApiLog);
 
-  // Roles
-  const [adminRole, parentRole, userRole] = await roleRepo.save([
-    roleRepo.create({ name: 'admin' }),
-    roleRepo.create({ name: 'parent' }),
-    roleRepo.create({ name: 'user' }),
-  ]);
 
   const hash = async (pw: string) => bcrypt.hash(pw, 10);
 
   // Users (Pakistani names)
-  const adminAisha = userRepo.create({ email: 'aisha.khan@cinaverse.pk', password: await hash('Passw0rd!'), role: adminRole.name });
-  const adminHamza = userRepo.create({ email: 'hamza.rauf@cinaverse.pk', password: await hash('Passw0rd!'), role: adminRole.name });
-  const parentFarah = userRepo.create({ email: 'farah.noor@cinaverse.pk', password: await hash('Passw0rd!'), role: parentRole.name });
-  const parentImran = userRepo.create({ email: 'imran.ali@cinaverse.pk', password: await hash('Passw0rd!'), role: parentRole.name });
-  const userSara = userRepo.create({ email: 'sara.ahmed@cinaverse.pk', password: await hash('Passw0rd!'), role: userRole.name });
-  const userBilal = userRepo.create({ email: 'bilal.hussain@cinaverse.pk', password: await hash('Passw0rd!'), role: userRole.name });
+
+  const adminAisha = userRepo.create({ firstName: 'Aisha', lastName: 'Khan', email: 'aisha.khan@cinaverse.pk', password: await hash('Passw0rd!'), role: 'admin' });
+  const adminHamza = userRepo.create({ firstName: 'Hamza', lastName: 'Rauf', email: 'hamza.rauf@cinaverse.pk', password: await hash('Passw0rd!'), role: 'admin' });
+  const parentFarah = userRepo.create({ firstName: 'Farah', lastName: 'Noor', email: 'farah.noor@cinaverse.pk', password: await hash('Passw0rd!'), role: 'parent' });
+  const parentImran = userRepo.create({ firstName: 'Imran', lastName: 'Ali', email: 'imran.ali@cinaverse.pk', password: await hash('Passw0rd!'), role: 'parent' });
+  const userSara = userRepo.create({ firstName: 'Sara', lastName: 'Ahmed', email: 'sara.ahmed@cinaverse.pk', password: await hash('Passw0rd!'), role: 'user' });
+  const userBilal = userRepo.create({ firstName: 'Bilal', lastName: 'Hussain', email: 'bilal.hussain@cinaverse.pk', password: await hash('Passw0rd!'), role: 'user' });
 
   const [aisha, hamza, farah, imran, sara, bilal] = await userRepo.save([
     adminAisha,
@@ -123,17 +119,33 @@ async function main() {
 
   // Watchlist and review examples for Bilal
   await watchRepo.save([
-    watchRepo.create({ user: bilal, movieId: '872585' }),
-    watchRepo.create({ user: bilal, movieId: '346698' }),
+    watchRepo.create({ user: bilal, movieId: '872585', category: 'action', status: 'watched' }),
+    watchRepo.create({ user: bilal, movieId: '346698', category: 'adventure', status: 'pending' }),
   ]);
   await reviewRepo.save(
     reviewRepo.create({ user: bilal, movieId: '872585', rating: 4, comment: 'Solid action with great pacing.' })
   );
 
-  // Logs
-  await logRepo.save([
-    logRepo.create({ user: aisha, action: 'seed:init', metadata: { note: 'Admin created via seed' } }),
-    logRepo.create({ user: hamza, action: 'seed:init', metadata: { note: 'Second admin created via seed' } }),
+  // Login logs
+  await loginLogRepo.save([
+    loginLogRepo.create({ user: aisha, activity: 'seed:init', ipAddress: '127.0.0.1', timestamp: new Date('2024-11-01T00:00:00Z') }),
+    loginLogRepo.create({ user: hamza, activity: 'seed:init', ipAddress: '127.0.0.1', timestamp: new Date('2024-11-01T00:01:00Z') }),
+    loginLogRepo.create({ user: sara, activity: 'login', ipAddress: '127.0.0.1', timestamp: new Date('2024-11-01T00:05:00Z') }),
+    loginLogRepo.create({ user: sara, activity: 'logout', ipAddress: '127.0.0.1', timestamp: new Date('2024-11-01T00:06:00Z') }),
+  ]);
+
+  // API logs
+  await apiLogRepo.save([
+    apiLogRepo.create({ user: bilal, endpoint: '/watchlist', statusCode: 201, timestamp: new Date('2024-11-01T00:02:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/watchlist', statusCode: 201, timestamp: new Date('2024-11-01T00:03:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/review', statusCode: 201, timestamp: new Date('2024-11-01T00:04:00Z') }),
+    apiLogRepo.create({ user: farah, endpoint: '/parental', statusCode: 200, timestamp: new Date('2024-11-01T00:07:00Z') }),
+    apiLogRepo.create({ user: imran, endpoint: '/parental', statusCode: 200, timestamp: new Date('2024-11-01T00:08:00Z') }),
+    apiLogRepo.create({ user: aisha, endpoint: '/plans/purchase', statusCode: 201, timestamp: new Date('2024-11-01T00:09:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/movies/search', statusCode: 200, timestamp: new Date('2024-11-01T00:10:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/review', statusCode: 200, timestamp: new Date('2024-11-01T00:11:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/review', statusCode: 204, timestamp: new Date('2024-11-01T00:12:00Z') }),
+    apiLogRepo.create({ user: bilal, endpoint: '/watchlist/1', statusCode: 204, timestamp: new Date('2024-11-01T00:13:00Z') }),
   ]);
 
   console.log('Seed complete. Users:', {
