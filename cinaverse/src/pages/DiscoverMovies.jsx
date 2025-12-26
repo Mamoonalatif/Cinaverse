@@ -3,94 +3,125 @@ import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import SearchBar from '../components/discover/SearchBar';
 import Filters from '../components/discover/Filters';
-import MovieResultCard from '../components/discover/MovieResultCard';
+import MovieGrid from '../components/discover/MovieGrid';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import { useStore } from '../context/StoreContext';
 import '../App.css';
 
 const DiscoverMovies = () => {
-  const { searchMovies, addToWatchlist } = useStore();
-  const [query, setQuery] = useState('trending');
+  const { searchMovies, genres, addToWatchlist, getWatchlist, isAuthenticated } = useStore();
+  const [query, setQuery] = useState('popular');
   const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sortBy, setSortBy] = useState('popularity');
   const [minRating, setMinRating] = useState(0);
   const [year, setYear] = useState('');
+  const [genre, setGenre] = useState('');
+  const [watchlistIds, setWatchlistIds] = useState([]);
 
-  const fetchMovies = async (q) => {
+  const fetchMovies = React.useCallback(async (q) => {
     setLoading(true);
     setError(null);
+    let allMovies = [];
+    let seenIds = new Set();
+    const keywords = q && q !== 'popular' ? [q] : ['a', 'the'];
+
     try {
-      const data = await searchMovies(q || query || 'trending');
-      setResults(Array.isArray(data) ? data : (data?.results || []));
+      const responses = await Promise.all(
+        keywords.map(kw => searchMovies(kw))
+      );
+
+      responses.forEach(data => {
+        const movies = Array.isArray(data) ? data : (data?.results || []);
+        movies.forEach(m => {
+          if (!seenIds.has(m.id)) {
+            allMovies.push(m);
+            seenIds.add(m.id);
+          }
+        });
+      });
+
+      setResults(allMovies);
+      if (allMovies.length === 0) setError('No movies found.');
     } catch (e) {
       setError(e.message || 'Could not load movies');
-      setResults([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchMovies]);
 
   useEffect(() => {
-    fetchMovies('trending');
-  }, []);
+    fetchMovies();
+  }, [fetchMovies]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    getWatchlist().then(list => {
+      if (Array.isArray(list)) setWatchlistIds(list.map(item => String(item.movieId)));
+    }).catch(() => { });
+  }, [isAuthenticated, getWatchlist]);
 
   const filtered = useMemo(() => {
     return results
       .filter((m) => {
-        const rating = m.vote_average || m.rating || 0;
+        const rating = m.vote_average ?? m.rating ?? 0;
+        const poster = m.poster_path || m.poster;
+        if (!poster || rating === 0) return false;
+
         const releaseYear = m.release_date ? new Date(m.release_date).getFullYear() : null;
-        const matchesRating = rating >= minRating;
+        const matchesRating = Number(rating) >= minRating;
         const matchesYear = year ? String(releaseYear || '').startsWith(String(year)) : true;
-        return matchesRating && matchesYear;
+        const matchesGenre = genre
+          ? (m.genre_ids?.includes(Number(genre))) || (m.genres?.some(g => g.id === Number(genre)))
+          : true;
+
+        return matchesRating && matchesYear && matchesGenre;
       })
       .sort((a, b) => {
-        if (sortBy === 'rating') return (b.vote_average || b.rating || 0) - (a.vote_average || a.rating || 0);
-        if (sortBy === 'year') {
-          const ay = a.release_date ? new Date(a.release_date).getFullYear() : 0;
-          const by = b.release_date ? new Date(b.release_date).getFullYear() : 0;
-          return by - ay;
-        }
-        if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '');
+        if (sortBy === 'rating') return (b.vote_average ?? 0) - (a.vote_average ?? 0);
+        if (sortBy === 'year') return new Date(b.release_date || 0) - new Date(a.release_date || 0);
         return (b.popularity || 0) - (a.popularity || 0);
-      });
-  }, [results, sortBy, minRating, year]);
+      })
+      .slice(0, 12);
+  }, [results, sortBy, minRating, year, genre]);
 
   const handleAdd = async (movie) => {
+    if (!isAuthenticated) return alert('Please login');
+
+    // Optimization: Use local genres instead of fetching details
+    const genreId = movie.genre_ids?.[0];
+    const category = genres.find(g => g.id === genreId)?.name || '';
+
     try {
-      await addToWatchlist(movie.id);
+      await addToWatchlist(movie.id, 'pending', category);
+      setWatchlistIds(prev => [...prev, String(movie.id)]);
       alert('Added to watchlist');
     } catch (e) {
-      alert(e.message || 'Failed to add');
+      alert(e.message);
     }
   };
 
   return (
-    <div className="page-shell">
+    <div style={{ background: '#000', minHeight: '100vh', paddingTop: 64 }}>
       <Navbar />
-      <main className="page-main">
-        <section className="section-header">
-          <div>
-            <h2>Discover Movies</h2>
-            <p className="text-muted">Search the catalog and add titles to your watchlist.</p>
+      <main className="container py-4" style={{ minHeight: '80vh', paddingTop: 80 }}>
+        <section className="mb-4">
+          <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-end gap-3 mb-3">
+            <div>
+              <h2 className="text-white mb-1">Discover</h2>
+              <p className="text-white-50 mb-0">Find your next favorite movie.</p>
+            </div>
+            <div style={{ minWidth: 280 }}>
+              <SearchBar value={query} onChange={setQuery} onSubmit={() => fetchMovies(query)} />
+            </div>
           </div>
-          <SearchBar value={query} onChange={setQuery} onSubmit={() => fetchMovies(query)} />
+          <Filters sortBy={sortBy} setSortBy={setSortBy} minRating={minRating} setMinRating={setMinRating} year={year} setYear={setYear} genre={genre} setGenre={setGenre} />
         </section>
 
-        <Filters sortBy={sortBy} setSortBy={setSortBy} minRating={minRating} setMinRating={setMinRating} year={year} setYear={setYear} />
-
-        {loading && <p className="text-muted">Loading...</p>}
+        {loading ? <div className="row g-4"><LoadingSkeleton type="card" count={12} /></div> : null}
         {error && <div className="alert alert-danger">{error}</div>}
-
-        <div className="discover-grid">
-          {!loading && filtered.map((movie) => (
-            <MovieResultCard key={movie.id} movie={movie} onAdd={handleAdd} />
-          ))}
-        </div>
-
-        {!loading && filtered.length === 0 && (
-          <p className="text-muted">No movies found. Try another search.</p>
-        )}
+        {!loading && <MovieGrid movies={filtered} watchlistIds={watchlistIds} onAddToWatchlist={handleAdd} />}
       </main>
       <Footer />
     </div>
@@ -98,3 +129,4 @@ const DiscoverMovies = () => {
 };
 
 export default DiscoverMovies;
+
