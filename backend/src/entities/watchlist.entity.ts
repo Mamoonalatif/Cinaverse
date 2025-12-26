@@ -6,8 +6,15 @@ export class Watchlist {
   @PrimaryGeneratedColumn()
   id: number;
 
+
   @Column()
   movieId: string;
+
+  @Column({ nullable: true })
+  category: string;
+
+  @Column({ nullable: true })
+  status: string;
 
   @Column({ default: new Date().toISOString() })
   createdAt: string;
