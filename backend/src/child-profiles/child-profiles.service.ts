@@ -5,7 +5,7 @@ import { ChildProfile } from '../entities/child-profile.entity';
 
 @Injectable()
 export class ChildProfilesService {
-  constructor(@InjectRepository(ChildProfile) private repo: Repository<ChildProfile>) {}
+  constructor(@InjectRepository(ChildProfile) private repo: Repository<ChildProfile>) { }
 
   list(parentId: number) {
     return this.repo.find({ where: { parent: { id: parentId } } });
@@ -17,16 +17,15 @@ export class ChildProfilesService {
   }
 
   async update(parentId: number, id: number, data: Partial<ChildProfile>) {
-    const existing = await this.repo.findOne({ where: { id, parent: { id: parentId } } });
-    if (!existing) throw new NotFoundException('Child profile not found');
-    await this.repo.update(id, { ...data, parent: { id: parentId } });
-    return this.repo.findOne({ where: { id, parent: { id: parentId } } });
+    // Combine existence check and update
+    const result = await this.repo.update({ id, parent: { id: parentId } }, data);
+    if (result.affected === 0) throw new NotFoundException('Profile not found');
+    return this.repo.findOne({ where: { id } });
   }
 
   async remove(parentId: number, id: number) {
-    const existing = await this.repo.findOne({ where: { id, parent: { id: parentId } } });
-    if (!existing) throw new NotFoundException('Child profile not found');
-    await this.repo.delete(id);
+    const result = await this.repo.delete({ id, parent: { id: parentId } });
+    if (result.affected === 0) throw new NotFoundException('Profile not found');
     return { success: true };
   }
 
