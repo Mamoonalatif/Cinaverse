@@ -13,7 +13,6 @@ import { PlansModule } from './plans/plans.module';
 import { AdminModule } from './admin/admin.module';
 import { LogsModule } from './logs/logs.module';
 import { User } from './entities/user.entity';
-import { Role } from './entities/role.entity';
 import { Watchlist } from './entities/watchlist.entity';
 import { Review } from './entities/review.entity';
 import { MovieCache } from './entities/movie-cache.entity';
@@ -21,7 +20,8 @@ import { ParentalSettings } from './entities/parental-settings.entity';
 import { Plan } from './entities/plan.entity';
 import { Subscription } from './entities/subscription.entity';
 import { Payment } from './entities/payment.entity';
-import { Log } from './entities/log.entity';
+import { LoginLog } from './entities/login-log.entity';
+import { ApiLog } from './entities/api-log.entity';
 import { ChildProfile } from './entities/child-profile.entity';
 import { ChildProfilesModule } from './child-profiles/child-profiles.module';
 
@@ -36,7 +36,6 @@ import { ChildProfilesModule } from './child-profiles/child-profiles.module';
         const common = {
           entities: [
             User,
-            Role,
             Watchlist,
             Review,
             MovieCache,
@@ -44,10 +43,11 @@ import { ChildProfilesModule } from './child-profiles/child-profiles.module';
             Plan,
             Subscription,
             Payment,
-            Log,
+            LoginLog,
+            ApiLog,
             ChildProfile,
           ],
-          synchronize: config.get<string>('NODE_ENV') !== 'production',
+          synchronize: true, // TEMP: always sync for dev, revert after tables are created
           logging: config.get<string>('DB_LOGGING', 'false') === 'true',
         };
 
