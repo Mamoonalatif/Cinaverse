@@ -4,32 +4,26 @@ dist/
 .env
 .DS_Store
 
-# === EXCLUDE MEMBER 2 (Engagement & Commerce) ===
-# Backend
+# === MEMBER 2 EXCLUSIONS (Engagement & Billing) ===
 backend/src/watchlist/
 backend/src/reviews/
 backend/src/plans/
-# Frontend Pages
 cinaverse/src/pages/Watchlist.jsx
-cinaverse/src/pages/MovieDetails.jsx
-cinaverse/src/pages/WatchTrailer.jsx
 cinaverse/src/pages/Auth.jsx
 cinaverse/src/pages/Plans.jsx
 cinaverse/src/pages/Checkout.jsx
-cinaverse/src/pages/PaymentSuccess.jsx
-# Frontend Components
 cinaverse/src/components/MovieCard.jsx
 cinaverse/src/components/MovieGrid.jsx
+cinaverse/src/components/watchlist/
 cinaverse/src/components/auth/
+cinaverse/src/components/LoadingSkeleton.jsx
 
-# === EXCLUDE MEMBER 3 (Management & Safety) ===
-# Backend
+# === MEMBER 3 EXCLUSIONS (Governance & Management) ===
 backend/src/admin/
 backend/src/child-profiles/
 backend/src/parental/
 backend/src/logs/
-# Frontend Pages
 cinaverse/src/pages/UserDashboard.jsx
 cinaverse/src/pages/ParentDashboard.jsx
-# Frontend Components
+cinaverse/src/pages/PaymentSuccess.jsx
 cinaverse/src/components/dashboards/
