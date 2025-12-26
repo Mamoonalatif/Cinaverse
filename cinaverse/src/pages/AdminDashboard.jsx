@@ -1,119 +1,161 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
-import StatsCard from '../components/dashboards/StatsCard';
 import { useStore } from '../context/StoreContext';
-import '../App.css';
+import UserSidebar from '../components/dashboards/UserSidebar';
+import OverviewTab from '../components/dashboards/admin/OverviewTab';
+import UserManagementTab from '../components/dashboards/admin/UserManagementTab';
+import ReviewModerationTab from '../components/dashboards/admin/ReviewModerationTab';
+import WatchlistMonitoringTab from '../components/dashboards/admin/WatchlistMonitoringTab';
+import LogsAnalyticsTab from '../components/dashboards/admin/LogsAnalyticsTab';
+import SettingsTab from '../components/dashboards/SettingsTab';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 const AdminDashboard = () => {
-  const { adminGetUsers, adminGetLogs, adminGetWatchlists, adminUpdateUserRole } = useStore();
-  const [users, setUsers] = useState([]);
-  const [logsCount, setLogsCount] = useState(0);
-  const [watchlists, setWatchlists] = useState([]);
-  const [error, setError] = useState(null);
-  const [savingId, setSavingId] = useState(null);
+    const {
+        user,
+        adminGetUsers, adminGetLogs, adminGetWatchlists, adminUpdateUserRole,
+        adminDeleteUser, adminGetReviews, adminDeleteReview, adminGetStats
+    } = useStore();
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const u = await adminGetUsers();
-        setUsers(Array.isArray(u) ? u : []);
-      } catch (e) {
-        setError(e.message || 'Admin access required');
-      }
-      try {
-        const logs = await adminGetLogs();
-        setLogsCount(Array.isArray(logs) ? logs.length : 0);
-      } catch {}
-      try {
-        const wl = await adminGetWatchlists();
-        setWatchlists(Array.isArray(wl) ? wl : []);
-      } catch {}
+    const [activeTab, setActiveTab] = useState('overview');
+    const [data, setData] = useState({
+        users: [],
+        logs: [],
+        watchlists: [],
+        reviews: [],
+        stats: {}
+    });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const loadAllData = async () => {
+        setLoading(true);
+        try {
+            const [u, l, w, r, s] = await Promise.all([
+                adminGetUsers(),
+                adminGetLogs(),
+                adminGetWatchlists(),
+                adminGetReviews(),
+                adminGetStats().catch(() => ({
+                    totalUsers: 0,
+                    totalReviews: 0,
+                    totalWatchlist: 0,
+                    apiCallsToday: 0,
+                    activeSubscriptions: 0
+                }))
+            ]);
+
+            setData({
+                users: Array.isArray(u) ? u : [],
+                logs: Array.isArray(l) ? l : [],
+                watchlists: Array.isArray(w) ? w : [],
+                reviews: Array.isArray(r) ? r : [],
+                stats: s || {}
+            });
+        } catch (e) {
+            setError(e.message || 'Access Denied: Administrative privileges required.');
+        } finally {
+            setLoading(false);
+        }
     };
-    load();
-  }, []);
 
-  const handleRoleChange = async (id, role) => {
-    setSavingId(id);
-    try {
-      await adminUpdateUserRole(id, role);
-      const u = await adminGetUsers();
-      setUsers(Array.isArray(u) ? u : []);
-    } catch (e) {
-      setError(e.message || 'Failed to update role');
-    } finally {
-      setSavingId(null);
+    useEffect(() => {
+        loadAllData();
+    }, []);
+
+    const handleUpdateRole = async (id, role) => {
+        try {
+            await adminUpdateUserRole(id, role);
+            loadAllData(); // Refresh
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    const handleDeleteUser = async (id) => {
+        if (!window.confirm('Are you sure you want to permanently delete this user?')) return;
+        try {
+            await adminDeleteUser(id);
+            loadAllData();
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    const handleDeleteReview = async (id) => {
+        if (!window.confirm('Delete this review?')) return;
+        try {
+            await adminDeleteReview(id);
+            loadAllData();
+        } catch (e) {
+            alert(e.message);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center gap-4">
+                <Loader2 className="animate-spin text-cinema-red" size={48} />
+                <p className="text-gray-500 font-bold uppercase tracking-widest animate-pulse">Initializing Admin Engine...</p>
+            </div>
+        );
     }
-  };
 
-  return (
-    <div className="page-shell">
-      <Navbar />
-      <main className="page-main">
-        <div className="section-header">
-          <div>
-            <h2>Admin Dashboard</h2>
-            <p className="text-muted">Platform overview</p>
-          </div>
+    if (error) {
+        return (
+            <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8">
+                <div className="bg-red-900/10 border border-red-500/20 p-12 rounded-3xl text-center max-w-lg">
+                    <AlertCircle className="text-red-500 mx-auto mb-6" size={64} />
+                    <h2 className="text-2xl font-black text-white mb-4">SECURITY ALERT</h2>
+                    <p className="text-gray-400 mb-8">{error}</p>
+                    <button onClick={() => window.location.href = '/'} className="bg-cinema-red text-white px-8 py-3 rounded-xl font-bold hover:scale-105 transition-all">
+                        Return to Safety
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-black min-vh-100 d-flex flex-column">
+            <Navbar />
+            <main className="flex-grow-1 pb-5 mt-5" style={{ paddingTop: 64 }}>
+                <div className="container py-4">
+                    <div className="row g-3">
+                        <div className="col-lg-3">
+                            <UserSidebar user={user || { role: 'admin' }} activeTab={activeTab} onTabChange={setActiveTab} />
+                        </div>
+
+                        <div className="col-lg-9">
+                            <div className="transition-all duration-500 ease-in-out">
+                                {activeTab === 'overview' && <OverviewTab stats={data.stats} />}
+                                {activeTab === 'users' && (
+                                    <UserManagementTab
+                                        users={data.users}
+                                        onUpdateRole={handleUpdateRole}
+                                        onDeleteUser={handleDeleteUser}
+                                    />
+                                )}
+                                {activeTab === 'reviews' && (
+                                    <ReviewModerationTab
+                                        reviews={data.reviews}
+                                        onDeleteReview={handleDeleteReview}
+                                    />
+                                )}
+                                {activeTab === 'watchlist' && (
+                                    <WatchlistMonitoringTab watchlists={data.watchlists} />
+                                )}
+                                {activeTab === 'logs' && <LogsAnalyticsTab logs={data.logs} />}
+                                {activeTab === 'settings' && <SettingsTab />}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+            <Footer />
         </div>
-
-        {error && <div className="alert alert-warning">{error}</div>}
-
-        <div className="stats-grid">
-          <StatsCard icon="👥" label="Users" value={users.length} />
-          <StatsCard icon="📋" label="Watchlists" value={watchlists.length} />
-          <StatsCard icon="📝" label="Logs" value={logsCount} />
-        </div>
-
-        <section className="card-panel">
-          <div className="card-header">
-            <h4>Recent Users</h4>
-          </div>
-          <div className="table-responsive">
-            <table className="table table-dark table-sm mb-0">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Email</th>
-                  <th>Joined</th>
-                  <th>Role</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.slice(0, 8).map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.id}</td>
-                    <td>{u.email}</td>
-                    <td>{u.createdAt || u.created_at || ''}</td>
-                    <td>{u.role}</td>
-                    <td>
-                      <select
-                        className="form-select form-select-sm bg-dark text-white"
-                        value={u.role}
-                        disabled={savingId === u.id}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                      >
-                        <option value="user">user</option>
-                        <option value="parent">parent</option>
-                        <option value="admin">admin</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-                {!users.length && (
-                  <tr>
-                    <td colSpan="5" className="text-muted">No users or insufficient permissions.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </main>
-      <Footer />
-    </div>
-  );
+    );
 };
 
 export default AdminDashboard;
