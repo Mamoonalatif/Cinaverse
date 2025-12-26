@@ -13,4 +13,14 @@ export class Plan {
 
   @Column('text')
   description: string;
+
+  // Screen-related fields (merged from Screen entity)
+  @Column({ nullable: true })
+  resolution: string;
+
+  @Column({ type: 'int', nullable: true })
+  maxDevices: number;
+
+  @Column({ nullable: true })
+  screenType: string;
 }
