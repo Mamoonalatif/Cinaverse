@@ -12,7 +12,7 @@ const MovieResultCard = ({ movie, onAdd }) => {
       <div className="discover-poster">
         <img src={poster} alt={title} />
         <div className="discover-overlay">
-          <button className="btn btn-danger btn-sm" onClick={() => onAdd(movie)}>
+          <button className="btn custom-red-btn btn-sm" onClick={() => onAdd(movie)}>
             + Watchlist
           </button>
         </div>
