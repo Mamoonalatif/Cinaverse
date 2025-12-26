@@ -6,7 +6,7 @@ import { AuthUser } from '../common/decorators/user.decorator';
 @Controller('movies')
 @UseGuards(OptionalJwtAuthGuard)
 export class MoviesController {
-  constructor(private service: MoviesService) {}
+  constructor(private service: MoviesService) { }
 
   @Get('search')
   search(@AuthUser() user: any, @Headers('x-child-id') childId?: string, @Query('q') q?: string, @Query('query') query?: string) {
@@ -29,6 +29,11 @@ export class MoviesController {
     return this.service.getLatestReleases(user?.id, childId ? parseInt(childId, 10) : undefined);
   }
 
+  @Get('genres')
+  getGenres() {
+    return this.service.getGenres();
+  }
+
   @Get(':id')
   getDetails(@AuthUser() user: any, @Headers('x-child-id') childId: string, @Param('id') id: string) {
     return this.service.getDetails(id, user?.id, childId ? parseInt(childId, 10) : undefined);
@@ -37,6 +42,11 @@ export class MoviesController {
   @Get(':id/trailer')
   getTrailer(@Param('id') id: string) {
     return this.service.getTrailer(id);
+  }
+
+  @Get(':id/similar')
+  getSimilar(@AuthUser() user: any, @Headers('x-child-id') childId: string, @Param('id') id: string) {
+    return this.service.getSimilarMovies(id, user?.id, childId ? parseInt(childId, 10) : undefined);
   }
 
   @Get(':id/streaming')
