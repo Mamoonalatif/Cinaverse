@@ -17,4 +17,7 @@ export class Review {
 
   @ManyToOne(() => User, (u) => u.reviews, { onDelete: 'CASCADE' })
   user: User;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 }
