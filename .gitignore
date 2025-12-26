@@ -1,0 +1,27 @@
+# Standard Ignores
+node_modules/
+dist/
+.env
+.DS_Store
+
+# === MEMBER 2 EXCLUSIONS ===
+backend/src/watchlist/
+backend/src/reviews/
+backend/src/plans/
+cinaverse/src/pages/Watchlist.jsx
+cinaverse/src/pages/Auth.jsx
+cinaverse/src/pages/Plans.jsx
+cinaverse/src/pages/Checkout.jsx
+cinaverse/src/components/MovieCard.jsx
+cinaverse/src/components/discover/MovieGrid.jsx
+
+# === MEMBER 3 EXCLUSIONS ===
+backend/src/admin/
+backend/src/child-profiles/
+backend/src/parental/
+backend/src/logs/
+cinaverse/src/pages/UserDashboard.jsx
+cinaverse/src/pages/ParentDashboard.jsx
+cinaverse/src/pages/AdminDashboard.jsx
+cinaverse/src/pages/PaymentSuccess.jsx
+cinaverse/src/components/dashboards/
