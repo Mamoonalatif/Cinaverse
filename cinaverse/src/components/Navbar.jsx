@@ -1,23 +1,29 @@
-import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import React from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import logo from '../assets/logo.png';
 import { useStore } from '../context/StoreContext';
 
 const Navbar = () => {
-  const location = useLocation();
   const navigate = useNavigate();
-  const [activeLink, setActiveLink] = useState(location.pathname);
-  const { user, logout, activeChildId, clearChildProfile } = useStore();
+  const { user, logout, activeChildId, clearChildProfile, childProfiles } = useStore();
 
+  // Find active child profile name
+  const activeChild = childProfiles?.find(p => p.id === activeChildId);
+
+  // Only show links based on user role
   const navigationLinks = [
     { name: 'Home', path: '/' },
     { name: 'Discover', path: '/discover' },
-    { name: 'Watchlist', path: '/watchlist' },
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'Admin', path: '/admin-dashboard' },
-    { name: 'Parent', path: '/parent-dashboard' }
-  ];
+    user && { name: 'Watchlist', path: '/watchlist' },
+    user && { name: 'Dashboard', path: '/dashboard' },
+  ].filter(Boolean);
+
+  const handleLogout = () => {
+    clearChildProfile();
+    logout();
+    navigate('/auth', { replace: true });
+  };
 
   return (
     <nav className="navbar navbar-expand-lg fixed-top custom-navbar">
@@ -31,40 +37,37 @@ const Navbar = () => {
         <ul className="navbar-nav d-flex flex-row">
           {navigationLinks.map((link) => (
             <li key={link.name} className="nav-item mx-3">
-              <Link
+              <NavLink
                 to={link.path}
-                className={`nav-link custom-nav-link ${location.pathname === link.path ? 'active-link' : ''}`}
-                onClick={() => setActiveLink(link.path)}
+                className={({ isActive }) =>
+                  `nav-link custom-nav-link${isActive ? ' active-link' : ''}`
+                }
+                end
               >
                 {link.name}
-              </Link>
+              </NavLink>
             </li>
           ))}
         </ul>
 
         {/* Auth Buttons */}
         <div className="d-flex gap-2 align-items-center">
-          {activeChildId && (
-            <span className="badge bg-info text-dark">Child Active: #{activeChildId}</span>
+          {activeChild && (
+            <span className="badge custom-red text-white fw-black px-3 py-2 rounded-pill shadow-sm" style={{ fontSize: '10px', letterSpacing: '1px' }}>
+              PROFILING: {activeChild.name.toUpperCase()}
+            </span>
           )}
           {!user && (
             <>
-              <Link to="/login" className="btn btn-outline-light fw-bold px-3">
-                Login
-              </Link>
-              <Link to="/register" className="btn btn-danger fw-bold px-3">
-                Sign Up
+              <Link to="/auth" className="btn btn-outline-light fw-bold px-3">
+                Login / Signup
               </Link>
             </>
           )}
           {user && (
             <button
-              className="btn btn-outline-light fw-bold px-3"
-              onClick={async () => {
-                clearChildProfile();
-                await logout();
-                navigate('/login');
-              }}
+              className="btn btn-outline-light fw-bold px-3 hover-red"
+              onClick={handleLogout}
             >
               Logout
             </button>
