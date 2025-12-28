@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
-import Hero from '../components/home/Hero';
-import MovieCarousel from '../components/home/MovieCarousel';
+import Hero from '../components/Hero';
+import MovieCarousel from '../components/MovieCarousel';
 import Footer from '../components/Footer';
-import AboutUs from '../components/home/AboutUs';
 import { useStore } from '../context/StoreContext';
 import '../App.css';
 
@@ -15,18 +14,20 @@ const Home = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [trendData, latestData] = await Promise.all([
-          getTrendingMovies(),
-          getLatestMovies()
-        ]);
-        setTrending(Array.isArray(trendData) ? trendData : (trendData?.results || []));
-        setLatest(Array.isArray(latestData) ? latestData : (latestData?.results || []));
-      } catch (error) {
-        console.error('Failed to load home data:', error);
+        const trend = await getTrendingMovies();
+        setTrending(Array.isArray(trend) ? trend : (trend?.results || []));
+      } catch {
+        setTrending([]);
+      }
+      try {
+        const recent = await getLatestMovies();
+        setLatest(Array.isArray(recent) ? recent : (recent?.results || []));
+      } catch {
+        setLatest([]);
       }
     };
     load();
-  }, [getTrendingMovies, getLatestMovies]);
+  }, []);
 
   return (
     <div className="homepage">
@@ -34,7 +35,6 @@ const Home = () => {
       <Hero />
       <MovieCarousel title="Trending Now" movies={trending} />
       <MovieCarousel title="Latest Releases" movies={latest} />
-      <AboutUs />
       <Footer />
     </div>
   );
